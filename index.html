@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Bezier Type Design Tool</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, Helvetica, Arial, sans-serif; background: #1a1a1a; color: #e0e0e0; display: flex; height: 100vh; overflow: hidden; }
+
+  /* --- Resizable Sidebar --- */
+  #sidebar-wrap { display: flex; flex-shrink: 0; position: relative; }
+  #controls {
+    width: 280px; min-width: 200px; padding: 20px; background: #242424; border-right: 1px solid #333;
+    display: flex; flex-direction: column; gap: 8px; overflow-y: auto;
+  }
+  #resize-handle {
+    width: 5px; cursor: col-resize; background: transparent; flex-shrink: 0;
+    transition: background 0.15s;
+  }
+  #resize-handle:hover, #resize-handle.active { background: #4a9eff; }
+
+  /* --- Collapsible Sections --- */
+  .section-header {
+    font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: #888;
+    margin-bottom: 2px; cursor: pointer; display: flex; justify-content: space-between;
+    align-items: center; user-select: none;
+  }
+  .section-header::after {
+    content: '▾'; font-size: 10px; transition: transform 0.2s; color: #666;
+  }
+  .section-header.collapsed::after { transform: rotate(-90deg); }
+  .section-body { display: flex; flex-direction: column; gap: 2px; }
+  .section-body.hidden { display: none; }
+
+  #controls .control-group { display: flex; flex-direction: column; gap: 2px; }
+  #controls .control-group label { font-size: 12px; color: #aaa; display: flex; justify-content: space-between; }
+  #controls .control-group label span { color: #fff; font-weight: 600; }
+  input[type="range"] { width: 100%; accent-color: #4a9eff; }
+  button {
+    padding: 8px; background: #4a9eff; color: #fff; border: none; border-radius: 6px;
+    font-size: 13px; cursor: pointer; font-weight: 600;
+  }
+  button:hover { background: #3a8eef; }
+  button.secondary { background: #444; }
+  button.secondary:hover { background: #555; }
+  button.warn { background: #c62828; }
+  button.warn:hover { background: #e53935; }
+  button.small { padding: 5px 8px; font-size: 11px; }
+  #canvas-wrap { flex: 1; display: flex; align-items: center; justify-content: center; padding: 20px; position: relative; }
+  canvas { background: #fff; box-shadow: 0 4px 24px rgba(0,0,0,0.4); cursor: crosshair; }
+  .checkbox-group { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #aaa; }
+  .checkbox-group input { accent-color: #4a9eff; }
+  .divider { border-top: 1px solid #333; margin: 4px 0; }
+  #point-count { font-size: 11px; color: #aaa; text-align: center; }
+  #path-list { display: flex; flex-direction: column; gap: 4px; }
+  .path-tab {
+    padding: 6px 10px; background: #333; border: 1px solid #444; border-radius: 4px;
+    font-size: 11px; color: #aaa; cursor: pointer; display: flex; justify-content: space-between; align-items: center;
+  }
+  .path-tab.active { background: #4a9eff22; border-color: #4a9eff; color: #fff; }
+  .path-tab .delete-path { color: #888; cursor: pointer; font-size: 14px; line-height: 1; }
+  .path-tab .delete-path:hover { color: #e53935; }
+  textarea {
+    width: 100%; padding: 6px 8px; background: #333; border: 1px solid #555;
+    border-radius: 4px; color: #fff; font-size: 12px; resize: vertical; min-height: 50px;
+    font-family: inherit;
+  }
+
+  /* --- Floating Toolbar --- */
+  #floating-toolbar {
+    position: fixed; bottom: 20px; right: 20px; z-index: 100;
+    background: #2a2a2a; border: 1px solid #444; border-radius: 12px;
+    padding: 14px 16px; display: flex; flex-direction: column; gap: 8px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.5); min-width: 220px;
+  }
+  #floating-toolbar .toolbar-title {
+    font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: #888;
+    margin-bottom: 2px; display: flex; justify-content: space-between; align-items: center;
+  }
+  #floating-toolbar .toolbar-buttons { display: flex; flex-direction: column; gap: 6px; }
+  #floating-toolbar .toolbar-row { display: flex; gap: 6px; align-items: center; }
+  #floating-toolbar .toolbar-row button { flex: 1; }
+
+  /* Toggle switch */
+  .toggle-wrap { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #aaa; }
+  .toggle-track {
+    width: 36px; height: 20px; border-radius: 10px; background: #444; position: relative;
+    cursor: pointer; transition: background 0.2s; flex-shrink: 0;
+  }
+  .toggle-track.on { background: #4a9eff; }
+  .toggle-track::after {
+    content: ''; position: absolute; top: 2px; left: 2px;
+    width: 16px; height: 16px; border-radius: 50%; background: #fff;
+    transition: transform 0.2s;
+  }
+  .toggle-track.on::after { transform: translateX(16px); }
+
+  #floating-toolbar .hint {
+    font-size: 11px; color: #999; line-height: 1.7; margin-top: 4px;
+    padding: 8px 10px; background: #1e1e1e; border-radius: 8px; border: 1px solid #383838;
+    display: flex; flex-direction: column; gap: 3px;
+  }
+  #floating-toolbar .hint b { color: #4a9eff; }
+  #floating-toolbar .hint kbd {
+    display: inline-block; padding: 1px 5px; background: #333; border: 1px solid #555;
+    border-radius: 3px; font-size: 10px; font-family: inherit; color: #ddd;
+  }
+</style>
+</head>
+<body>
+
+<div id="sidebar-wrap">
+<div id="controls">
+
+  <h2 class="section-header" data-section="page">Page</h2>
+  <div class="section-body" data-section="page">
+    <div class="control-group" style="display:flex; flex-direction:row; gap:6px; align-items:center;">
+      <input type="number" id="page-w" value="595" min="100" max="5000" style="width:70px; padding:4px 6px; background:#333; border:1px solid #555; border-radius:4px; color:#fff; font-size:12px;">
+      <span style="color:#666; font-size:12px;">&times;</span>
+      <input type="number" id="page-h" value="842" min="100" max="5000" style="width:70px; padding:4px 6px; background:#333; border:1px solid #555; border-radius:4px; color:#fff; font-size:12px;">
+      <button id="apply-page" class="small secondary">Apply</button>
+    </div>
+  </div>
+
+  <div class="divider"></div>
+  <h2 class="section-header" data-section="paths">Paths</h2>
+  <div class="section-body" data-section="paths">
+    <div id="path-list"></div>
+    <button id="add-path" class="small secondary">+ New path</button>
+  </div>
+
+  <div class="divider"></div>
+  <h2 class="section-header" data-section="text">Text on Path</h2>
+  <div class="section-body" data-section="text">
+    <div class="control-group">
+      <textarea id="path-text" placeholder="Type here..." rows="3"></textarea>
+    </div>
+    <div class="control-group">
+      <label>Baseline offset <span id="val-baseline">0</span></label>
+      <input type="range" id="baseline-offset" min="-100" max="100" value="0">
+    </div>
+  </div>
+
+  <div class="divider"></div>
+  <h2 class="section-header" data-section="font">Font</h2>
+  <div class="section-body" data-section="font">
+    <div class="control-group">
+      <label>Import font</label>
+      <input type="file" id="font-file" accept=".ttf,.otf,.woff,.woff2" style="font-size:11px; color:#aaa;">
+    </div>
+  </div>
+
+  <div class="divider"></div>
+  <h2 class="section-header" data-section="stroke">Stroke</h2>
+  <div class="section-body" data-section="stroke">
+    <div class="control-group">
+      <label>Weight (px) <span id="val-weight">75.0</span></label>
+      <input type="range" id="stroke-weight" min="1" max="2000" value="750" step="1">
+    </div>
+    <div class="control-group">
+      <label>Color</label>
+      <input type="color" id="stroke-color" value="#222222" style="width:100%; height:28px; border:none; background:none; cursor:pointer;">
+    </div>
+  </div>
+
+  <div class="divider"></div>
+  <h2 class="section-header" data-section="handles">Handles</h2>
+  <div class="section-body" data-section="handles">
+    <div class="control-group">
+      <label>Handle length <span id="val-handle">56%</span></label>
+      <input type="range" id="handle-pct" min="5" max="100" value="56">
+    </div>
+  </div>
+
+  <div class="divider"></div>
+  <h2 class="section-header" data-section="pathopts">Path Options</h2>
+  <div class="section-body" data-section="pathopts">
+    <div class="checkbox-group">
+      <input type="checkbox" id="close-path">
+      <label for="close-path">Close path</label>
+    </div>
+  </div>
+
+  <div class="divider"></div>
+  <h2 class="section-header" data-section="display">Display</h2>
+  <div class="section-body" data-section="display">
+    <div class="checkbox-group">
+      <input type="checkbox" id="show-points" checked>
+      <label for="show-points">Show anchors</label>
+    </div>
+    <div class="checkbox-group">
+      <input type="checkbox" id="show-handles" checked>
+      <label for="show-handles">Show handles</label>
+    </div>
+    <div class="checkbox-group">
+      <input type="checkbox" id="show-debug-rect">
+      <label for="show-debug-rect">Show debug rectangles</label>
+    </div>
+    <div class="checkbox-group">
+      <input type="checkbox" id="show-extrema" checked>
+      <label for="show-extrema">Show extrema guides</label>
+    </div>
+    <div class="checkbox-group">
+      <input type="checkbox" id="show-indices">
+      <label for="show-indices">Show indices</label>
+    </div>
+  </div>
+
+  <div class="divider"></div>
+  <h2 class="section-header" data-section="generator">Generator</h2>
+  <div class="section-body" data-section="generator">
+    <details style="font-size:11px; color:#888; line-height:1.5; margin-bottom:4px;">
+      <summary style="cursor:pointer; color:#aaa;">How it works</summary>
+      <p style="margin-top:4px;">
+        Each point is placed by walking forward from the previous one. X/Y distance controls how far apart points can be horizontally and vertically. Rotation turns the walking direction a little at each step. Variance adds randomness to the direction — low values make straighter paths, high values make wilder ones. Noise frequency controls how smoothly that randomness changes — low is flowing, high is jerky. Margin keeps points away from the page edges. You can pin points (Shift+click) so they stay in place when you regenerate.
+      </p>
+    </details>
+    <div class="control-group">
+      <label>Points <span id="val-gen-points">12</span></label>
+      <input type="range" id="gen-points" min="3" max="80" value="12">
+    </div>
+    <div class="control-group">
+      <label>X dist min <span id="val-gen-x-min">30</span></label>
+      <input type="range" id="gen-x-min" min="0" max="400" value="30">
+    </div>
+    <div class="control-group">
+      <label>X dist max <span id="val-gen-x-max">150</span></label>
+      <input type="range" id="gen-x-max" min="0" max="400" value="150">
+    </div>
+    <div class="control-group">
+      <label>Y dist min <span id="val-gen-y-min">30</span></label>
+      <input type="range" id="gen-y-min" min="0" max="400" value="30">
+    </div>
+    <div class="control-group">
+      <label>Y dist max <span id="val-gen-y-max">150</span></label>
+      <input type="range" id="gen-y-max" min="0" max="400" value="150">
+    </div>
+    <div class="control-group">
+      <label>Rotation <span id="val-gen-rotation">45°</span></label>
+      <input type="range" id="gen-rotation" min="1" max="90" value="45">
+    </div>
+    <div class="control-group">
+      <label>Direction variance <span id="val-gen-variance">30°</span></label>
+      <input type="range" id="gen-variance" min="0" max="90" value="30">
+    </div>
+    <div class="control-group">
+      <label>Noise frequency <span id="val-gen-noise">0.30</span></label>
+      <input type="range" id="gen-noise" min="1" max="100" value="30">
+    </div>
+    <div class="control-group">
+      <label>Margin <span id="val-gen-margin">40</span></label>
+      <input type="range" id="gen-margin" min="10" max="120" value="40">
+    </div>
+  </div>
+
+</div>
+<div id="resize-handle"></div>
+</div>
+
+<div id="canvas-wrap">
+  <canvas id="canvas"></canvas>
+</div>
+
+<!-- Floating Toolbar (bottom-right) -->
+<div id="floating-toolbar">
+  <div class="toolbar-title">
+    <span>Tools</span>
+    <span id="point-count" style="font-size:10px; color:#aaa; text-transform:none; letter-spacing:0;">0 points</span>
+  </div>
+  <div class="toolbar-buttons">
+    <div class="toggle-wrap">
+      <div id="draw-mode-toggle" class="toggle-track on"></div>
+      <span id="draw-mode-label">Draw mode</span>
+    </div>
+    <div class="toolbar-row">
+      <button id="undo" class="secondary">Undo</button>
+      <button id="clear" class="warn">Clear all</button>
+    </div>
+    <button id="regenerate">Regenerate</button>
+    <button id="export-svg" class="secondary">Export SVG</button>
+  </div>
+  <div class="hint">
+    <span><b>Draw ON:</b> click to place points</span>
+    <span><b>Draw OFF:</b> click/drag to select &amp; move</span>
+    <span><kbd>Shift</kbd>+click &mdash; pin/unpin point</span>
+    <span><kbd>Del</kbd> / <kbd>Backspace</kbd> &mdash; remove selected</span>
+    <span><kbd>D</kbd> toggle draw &nbsp; <kbd>Z</kbd> undo &nbsp; <kbd>R</kbd> regenerate</span>
+  </div>
+</div>
+
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
